@@ -1,0 +1,181 @@
+/*
+Учебная группа 7441 ВЦ
+Черных Д.А.
+Email: dendy1996@yandex.ru
+*/
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <windows.h>
+#include <ctime>
+
+//******************************************************//
+double counter_files = 0;
+using std::string;
+using std::cout;
+using std::cin;
+using std::endl;
+//******************************************************//
+
+//******************************************************//
+class Info
+{
+public:
+    virtual string fileName() = 0;
+    virtual ~Info(){};
+};
+/*наследование*/
+class fileInfo: public Info
+{
+    string path;
+    WIN32_FIND_DATA fileData;
+public:
+    fileInfo (string _path, WIN32_FIND_DATA _fileData) : path(_path), fileData(_fileData){}
+    string fileName();
+};
+//******************************************************//
+
+string fileInfo::fileName()
+{
+    return path + fileData.cFileName;
+}
+
+
+
+//******************************************************//
+class Iterator
+{
+public:
+    virtual Info* next() = 0;
+    virtual ~Iterator() {}
+};
+/*наследование*/
+class fileIterator : public Iterator
+{
+    string path;
+    string mask;
+    HANDLE descriptor_search;
+    WIN32_FIND_DATA findFileData;
+    bool signal_first_search;
+    Iterator* it;
+
+    bool hasMask();
+public:
+    fileIterator(string _path, string _mask) : path(_path), mask(_mask), descriptor_search(0), signal_first_search(true), it(NULL) {}
+    ~fileIterator() {
+        if (it != NULL) {
+            delete it;
+        }
+
+        FindClose(descriptor_search);
+    }
+    Info* next();
+};
+//******************************************************//
+
+//описание метода next() из класса fileIterator: public Iterator
+//******************************************************//
+Info* fileIterator::next() {
+    do
+    {
+        if (it != NULL)
+        {
+            Info* repeat = it->next();
+            if (repeat != NULL)
+            {
+                return repeat;
+            }
+            delete it;
+            it = NULL;
+        }
+
+        if (signal_first_search)
+        {
+            descriptor_search = FindFirstFile((path + "*.*").c_str(), &findFileData);
+            signal_first_search = false;
+            if (descriptor_search == INVALID_HANDLE_VALUE)
+            {
+                return NULL;
+            }
+        }
+        else
+        {
+            if (FindNextFile(descriptor_search, &findFileData) == 0)
+            {
+                return NULL;
+            }
+        }
+
+
+        if ((strcmp(findFileData.cFileName,".") == 0) || (strcmp(findFileData.cFileName,"..") == 0))
+        {
+            continue;
+        }
+
+        if (!hasMask()) {
+            continue;
+        }
+
+        if (findFileData.dwFileAttributes != FILE_ATTRIBUTE_DIRECTORY) // если не каталог (не папка)
+        {
+            return new fileInfo(path, findFileData);
+        }
+
+        it = new fileIterator((path + findFileData.cFileName + "\\").c_str(), (mask).c_str());
+    }
+    while(true);
+}
+//******************************************************//
+
+
+bool fileIterator::hasMask() {
+    if (strstr(findFileData.cFileName, (mask).c_str()) != NULL)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+//******************************************************//
+int main()
+{
+    HANDLE hConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    setlocale(LC_ALL, "rus");
+    SetConsoleTextAttribute(hConsoleHandle, 2 | 9);
+    cout << "Введите директорию для поиска: ";
+    string path;
+    SetConsoleTextAttribute(hConsoleHandle, 0 | 15);
+    cin >> path;
+    SetConsoleTextAttribute(hConsoleHandle, 2 | 9);
+    cout << "Введите расширение: ";
+    string mask;
+    SetConsoleTextAttribute(hConsoleHandle, 0 | 15);
+    cin >> mask;
+
+    float start_time =  GetTickCount();
+
+    Info *info = NULL;
+    Iterator *it = new fileIterator(path,mask);
+    while ((info = it -> next()) != NULL)
+    {
+        cout << info -> fileName() << endl;
+        counter_files++;
+        delete info;
+    }
+
+
+    SetConsoleTextAttribute(hConsoleHandle, 2 | 9);
+    cout << "Всего найдено: ";
+    SetConsoleTextAttribute(hConsoleHandle, 0 | 15);
+    cout << counter_files << " файла (-ов)." << endl;
+    SetConsoleTextAttribute(hConsoleHandle, 2 | 9);
+    float search_time = GetTickCount() - start_time;
+    cout << "Время поиска: ";
+    SetConsoleTextAttribute(hConsoleHandle, 0 | 15);
+    cout << search_time/1000 << " секунд." << endl;
+    return 0;
+}
